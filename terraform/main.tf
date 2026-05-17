@@ -93,8 +93,13 @@ resource "aws_instance" "my_instance" {
   })
 
 
+
 	lifecycle {
     create_before_destroy = true  # ← New EC2 ready before old one dies
   }
+}
+resource "aws_eip" "main" {
+  instance = aws_instance.my_instance.id
+  domain   = "vpc"
 }
 

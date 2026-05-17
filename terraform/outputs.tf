@@ -18,4 +18,7 @@ output "security_group_id" {
 }
 output "key_name" {
   value = aws_key_pair.my_key.key_name
+}
+output "elastic_ip" {
+  value = aws_eip.main.public_ip
 } 
