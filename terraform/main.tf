@@ -108,9 +108,9 @@ resource "null_resource" "ansible" {
   provisioner "local-exec" {
     command = <<EOF
       sleep 30
-      echo "[ec2]" > ansible/inventory.ini
-      echo "${aws_eip.main.public_ip} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_ed25519" >> ansible/inventory.ini
-      ansible-playbook -i ansible/inventory.ini ansible/playbook.yml
+      echo "[ec2]" > ../ansible/inventory.ini
+      echo "${aws_eip.main.public_ip} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_ed25519" >> ../ansible/inventory.ini
+      ansible-playbook -i ../ansible/inventory.ini ../ansible/playbook.yml
     EOF
   }
 }
