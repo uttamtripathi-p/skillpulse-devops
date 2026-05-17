@@ -18,14 +18,23 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ap-south-1
 
-      - name: Start EC2 and fetch Elastic IP
+      - name: Start EC2 instance
         id: start_ec2
         run: |
-          aws ec2 start-instances --instance-ids ${{ secrets.EC2_INSTANCE_ID }} --region ap-south-1
-          echo "Waiting for instance to be running..."
-          aws ec2 wait instance-running --instance-ids ${{ secrets.EC2_INSTANCE_ID }} --region ap-south-1
-          echo "Waiting for status checks to pass..."
-          aws ec2 wait instance-status-ok --instance-ids ${{ secrets.EC2_INSTANCE_ID }} --region ap-south-1
+          STATE=$(aws ec2 describe-instances \
+            --instance-ids ${{ secrets.EC2_INSTANCE_ID }} \
+            --query "Reservations[0].Instances[0].State.Name" \
+            --output text --region ap-south-1)
+    
+          echo "Current state: $STATE"
+    
+          if [ "$STATE" != "running" ]; then
+            aws ec2 start-instances --instance-ids ${{ secrets.EC2_INSTANCE_ID }} --region ap-south-1
+            aws ec2 wait instance-running --instance-ids ${{ secrets.EC2_INSTANCE_ID }} --region ap-south-1
+            aws ec2 wait instance-status-ok --instance-ids ${{ secrets.EC2_INSTANCE_ID }} --region ap-south-1
+          else
+            echo "Instance already running, skipping start"
+          fi
 
           ELASTIC_IP=$(aws ec2 describe-addresses \
             --filters "Name=instance-id,Values=${{ secrets.EC2_INSTANCE_ID }}" \
