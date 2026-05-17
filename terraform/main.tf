@@ -114,3 +114,18 @@ resource "null_resource" "ansible" {
     EOF
   }
 }
+resource "aws_vpc_security_group_ingress_rule" "prometheus" {
+  security_group_id = aws_security_group.main.id
+  cidr_ipv4         = "0.0.0.0/0"
+  from_port         = 9090
+  ip_protocol       = "tcp"
+  to_port           = 9090
+}
+
+resource "aws_vpc_security_group_ingress_rule" "grafana" {
+  security_group_id = aws_security_group.main.id
+  cidr_ipv4         = "0.0.0.0/0"
+  from_port         = 3000
+  ip_protocol       = "tcp"
+  to_port           = 3000
+}
