@@ -1,0 +1,76 @@
+---
+- name: Configure EC2 for SkillPulse
+  hosts: ec2
+  become: true
+  vars:
+    app_dir: /home/ubuntu/github-actions-kubernetes-hackathon
+    compose_version: latest
+
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+
+    - name: Install required packages
+      apt:
+        name:
+          - curl
+          - git
+          - ca-certificates
+        state: present
+
+    - name: Install Docker
+      shell: curl -fsSL https://get.docker.com | sh
+      args:
+        creates: /usr/bin/docker
+
+    - name: Add ubuntu to docker group
+      user:
+        name: ubuntu
+        groups: docker
+        append: yes
+
+    - name: Enable and start Docker
+      systemd:
+        name: docker
+        enabled: yes
+        state: started
+
+    - name: Create Docker CLI plugins directory
+      file:
+        path: /usr/local/lib/docker/cli-plugins
+        state: directory
+        mode: '0755'
+
+    - name: Install Docker Compose
+      shell: |
+        curl -SL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64 \
+          -o /usr/local/lib/docker/cli-plugins/docker-compose
+        chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+      args:
+        creates: /usr/local/lib/docker/cli-plugins/docker-compose
+
+    - name: Verify Docker Compose
+      command: docker compose version
+      register: compose_version
+      changed_when: false
+
+    - name: Print Docker Compose version
+      debug:
+        msg: "{{ compose_version.stdout }}"
+
+    - name: Clone app repo
+      git:
+        repo: https://github.com/uttamtripathi-p/github-actions-kubernetes-hackathon.git
+        dest: "{{ app_dir }}"
+        version: main
+        force: yes
+      become_user: ubuntu
+
+    - name: Copy .env file
+      copy:
+        src: ../.env
+        dest: "{{ app_dir }}/.env"
+        owner: ubuntu
+        group: ubuntu
+        mode: '0600'
