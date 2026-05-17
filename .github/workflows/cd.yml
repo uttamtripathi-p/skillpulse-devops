@@ -61,7 +61,6 @@ jobs:
             fi
             docker compose pull
             docker compose up -d
+            docker compose -f docker-compose.monitoring.yml up -d
             docker image prune -f
-            docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d
-
       
