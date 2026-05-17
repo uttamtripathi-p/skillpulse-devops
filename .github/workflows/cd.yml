@@ -63,8 +63,4 @@ jobs:
             docker compose up -d
             docker image prune -f
 
-      - name: Stop EC2 after deploy
-        if: always()
-        run: |
-          aws ec2 stop-instances --instance-ids ${{ secrets.EC2_INSTANCE_ID }} --region ap-south-1
-          echo "Instance stopped to save cost"
+      
