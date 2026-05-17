@@ -1,4 +1,4 @@
-FROM nginx:alpine
+FROM nginx:alpine-slim
 
 COPY index.html /usr/share/nginx/html/
 COPY css /usr/share/nginx/html/css
