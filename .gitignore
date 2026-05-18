@@ -24,3 +24,5 @@ docs/skillpulse-kubernetes-guide.html
 # Ansible
 ansible/inventory.ini
 *.tar.gz
+*.zip
+*.gz
