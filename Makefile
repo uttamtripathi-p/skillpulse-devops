@@ -59,6 +59,20 @@ restart: ## Rebuild + reload images, roll backend + frontend
 	kubectl rollout status  deployment/backend  -n $(NAMESPACE) --timeout=120s
 	kubectl rollout status  deployment/frontend -n $(NAMESPACE) --timeout=60s
 
+deploy-ec2: ## [EC2] Full deploy: Network + App Stack + Monitoring Stack
+	docker network create skillpulse || true
+	docker compose pull
+	docker compose up -d --remove-orphans
+	docker compose -f docker-compose.monitoring.yml pull
+	docker compose -f docker-compose.monitoring.yml up -d --remove-orphans
+	docker image prune -f
+
+infra: ## [AWS] Initialize and apply Terraform infrastructure
+	cd terraform && terraform init && terraform apply -auto-approve
+
+setup-ec2: ## [Ansible] Run the setup playbook
+	ansible-playbook -i ansible/inventory.ini ansible/playbook.yml
+
 argocd-install: ## Install ArgoCD into the cluster
 	kubectl create namespace argocd || true
 	kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml --server-side --force-conflicts

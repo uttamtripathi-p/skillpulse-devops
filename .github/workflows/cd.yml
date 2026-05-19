@@ -62,20 +62,11 @@ jobs:
             fi
 
             # Safely inject the username from GitHub Secrets into the local .env on EC2
-            # This ensures Docker Compose always knows which registry to use
+            # AUTOMATICALLY ENSURE DOCKERHUB_USERNAME IS SET
             sed -i '/^DOCKERHUB_USERNAME=/d' .env
             echo "DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}" >> .env
             export DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
 
-            # ENSURE NETWORK EXISTS
-            docker network create skillpulse || true
+            # EXECUTE FULL DEPLOYMENT VIA MAKEFILE
+            make deploy-ec2
 
-            # RESTART APPLICATION STACK
-            docker compose pull
-            docker compose up -d --remove-orphans
-            
-            # RESTART MONITORING STACK
-            docker compose -f docker-compose.monitoring.yml pull
-            docker compose -f docker-compose.monitoring.yml up -d --remove-orphans
-            
-            docker image prune -f
