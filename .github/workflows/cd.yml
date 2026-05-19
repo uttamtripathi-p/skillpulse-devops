@@ -46,10 +46,12 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
+            # CLONE OR UPDATE REMOTE
             if [ ! -d ~/github-actions-kubernetes-hackathon ]; then
               git clone https://github.com/${{ github.repository }}.git ~/github-actions-kubernetes-hackathon
             fi
             cd ~/github-actions-kubernetes-hackathon
+            git remote set-url origin https://github.com/${{ github.repository }}.git
             
             # FORCE SYNC: Discard local changes and pull latest
             git fetch --all
@@ -63,10 +65,11 @@ jobs:
             # ENSURE NETWORK EXISTS
             docker network create skillpulse || true
 
-            # RESTART EVERYTHING
+            # RESTART APPLICATION STACK
             docker compose pull
             docker compose up -d --remove-orphans
             
+            # RESTART MONITORING STACK
             docker compose -f docker-compose.monitoring.yml pull
             docker compose -f docker-compose.monitoring.yml up -d --remove-orphans
             
