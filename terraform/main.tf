@@ -129,3 +129,11 @@ resource "aws_vpc_security_group_ingress_rule" "grafana" {
   ip_protocol       = "tcp"
   to_port           = 3000
 }
+
+resource "aws_vpc_security_group_ingress_rule" "loki" {
+  security_group_id = aws_security_group.main.id
+  cidr_ipv4         = "0.0.0.0/0"
+  from_port         = 3100
+  ip_protocol       = "tcp"
+  to_port           = 3100
+}

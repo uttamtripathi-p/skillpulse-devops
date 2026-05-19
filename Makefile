@@ -38,6 +38,7 @@ apply: ## Apply manifests and wait for rollouts
 	kubectl rollout status deployment/frontend  -n $(NAMESPACE) --timeout=60s
 	kubectl rollout status deployment/prometheus -n $(NAMESPACE) --timeout=60s
 	kubectl rollout status deployment/grafana    -n $(NAMESPACE) --timeout=60s
+	kubectl rollout status deployment/loki       -n $(NAMESPACE) --timeout=60s
 
 down: ## Delete the cluster
 	kind delete cluster --name $(CLUSTER)
@@ -46,7 +47,7 @@ status: ## Quick health snapshot
 	@kubectl get pods,svc,endpoints -n $(NAMESPACE)
 
 logs: ## Tail all three workloads at once
-	@kubectl logs -n $(NAMESPACE) -l 'app in (mysql,backend,frontend)' --all-containers --tail=50 -f --max-log-requests=10
+	@kubectl logs -n $(NAMESPACE) -l 'app in (mysql,backend,frontend,prometheus,grafana,loki)' --all-containers --tail=50 -f --max-log-requests=10
 
 mysql: ## Open a mysql shell into the StatefulSet pod
 	kubectl exec -it -n $(NAMESPACE) mysql-0 -- mysql -uskillpulse -pskillpulse123 skillpulse
