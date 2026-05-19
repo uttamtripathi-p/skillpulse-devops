@@ -1,6 +1,7 @@
 services:
   db:
     image: mysql:8.4
+    container_name: db
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
@@ -23,6 +24,7 @@ services:
     
   backend:
     image: ${DOCKERHUB_USERNAME}/skillpulse-backend:latest
+    container_name: backend
     build: ./backend
     restart: unless-stopped
     networks:
@@ -41,6 +43,7 @@ services:
 
   frontend:
     image: ${DOCKERHUB_USERNAME}/skillpulse-frontend:latest
+    container_name: frontend
     build: ./frontend
     restart: unless-stopped
     networks:
