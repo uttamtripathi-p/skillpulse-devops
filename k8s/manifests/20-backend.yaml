@@ -36,7 +36,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: uttamtripathi/skillpulse-backend:8d410ba37a63e886e5135e97916f679d232d974e
+          image: uttamtripathi/skillpulse-backend:24857d632cee86040a807b81636eac2a6027c411
           imagePullPolicy: Always
           ports:
             - name: http
