@@ -26,16 +26,10 @@ jobs:
             --query "Reservations[0].Instances[0].State.Name" \
             --output text --region ap-south-1)
     
-          echo "Current state: $STATE"
-    
           if [ "$STATE" != "running" ]; then
-            echo "Starting instance..."
             aws ec2 start-instances --instance-ids ${{ secrets.EC2_INSTANCE_ID }} --region ap-south-1
             aws ec2 wait instance-running --instance-ids ${{ secrets.EC2_INSTANCE_ID }} --region ap-south-1
-            echo "Instance is running. Waiting 30s for SSH service to initialize..."
             sleep 30
-          else
-            echo "Instance already running."
           fi
 
           ELASTIC_IP=$(aws ec2 describe-addresses \
@@ -43,13 +37,7 @@ jobs:
             --query "Addresses[0].PublicIp" \
             --output text --region ap-south-1)
           
-          if [ -z "$ELASTIC_IP" ] || [ "$ELASTIC_IP" == "None" ]; then
-            echo "ERROR: Could not retrieve Elastic IP. Check if EIP is associated with instance ${{ secrets.EC2_INSTANCE_ID }}"
-            exit 1
-          fi
-
           echo "EC2_HOST=$ELASTIC_IP" >> $GITHUB_OUTPUT
-          echo "Target Host IP: $ELASTIC_IP"
 
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1
@@ -62,14 +50,24 @@ jobs:
               git clone https://github.com/${{ github.repository }}.git ~/github-actions-kubernetes-hackathon
             fi
             cd ~/github-actions-kubernetes-hackathon
-            git pull origin main
+            
+            # FORCE SYNC: Discard local changes and pull latest
+            git fetch --all
+            git reset --hard origin/main
+            
             if [ ! -f .env ]; then
-              echo "ERROR: .env is missing. Create it manually once."
+              echo "ERROR: .env is missing."
               exit 1
             fi
+
+            # ENSURE NETWORK EXISTS
+            docker network create skillpulse || true
+
+            # RESTART EVERYTHING
             docker compose pull
-            docker compose up -d
-            sleep 5
-            docker compose -f docker-compose.monitoring.yml up -d
+            docker compose up -d --remove-orphans
+            
+            docker compose -f docker-compose.monitoring.yml pull
+            docker compose -f docker-compose.monitoring.yml up -d --remove-orphans
+            
             docker image prune -f
-      
