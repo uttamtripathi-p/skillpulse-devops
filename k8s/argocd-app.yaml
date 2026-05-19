@@ -8,7 +8,7 @@ spec:
   source:
     repoURL: https://github.com/uttamtripathi-p/github-actions-kubernetes-hackathon
     targetRevision: HEAD
-    path: k8s
+    path: k8s/manifests
   destination:
     server: https://kubernetes.default.svc
     namespace: skillpulse

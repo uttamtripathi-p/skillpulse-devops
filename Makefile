@@ -28,11 +28,11 @@ load: ## Push built images into the kind node
 	kind load docker-image $(FRONTEND_IMAGE) --name $(CLUSTER)
 
 apply: ## Apply manifests and wait for rollouts
-	kubectl apply -f k8s/00-namespace.yaml \
-	              -f k8s/10-mysql.yaml \
-	              -f k8s/20-backend.yaml \
-	              -f k8s/30-frontend.yaml \
-	              -f k8s/40-monitoring.yaml
+	kubectl apply -f k8s/manifests/00-namespace.yaml \
+	              -f k8s/manifests/10-mysql.yaml \
+	              -f k8s/manifests/20-backend.yaml \
+	              -f k8s/manifests/30-frontend.yaml \
+	              -f k8s/manifests/40-monitoring.yaml
 	kubectl rollout status statefulset/mysql    -n $(NAMESPACE) --timeout=180s
 	kubectl rollout status deployment/backend   -n $(NAMESPACE) --timeout=120s
 	kubectl rollout status deployment/frontend  -n $(NAMESPACE) --timeout=60s
