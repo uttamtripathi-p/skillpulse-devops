@@ -3,7 +3,7 @@ NAMESPACE ?= skillpulse
 BACKEND_IMAGE  ?= uttamtripathi/skillpulse-backend:latest
 FRONTEND_IMAGE ?= uttamtripathi/skillpulse-frontend:latest
 
-.PHONY: up down build load apply status logs mysql restart
+.PHONY: up down build load apply status logs mysql restart argocd-install argocd-password argocd-ui
 
 up: ## One-shot: build images, create cluster, load images, apply manifests
 	$(MAKE) build
@@ -58,3 +58,16 @@ restart: ## Rebuild + reload images, roll backend + frontend
 	kubectl rollout restart deployment/backend deployment/frontend -n $(NAMESPACE)
 	kubectl rollout status  deployment/backend  -n $(NAMESPACE) --timeout=120s
 	kubectl rollout status  deployment/frontend -n $(NAMESPACE) --timeout=60s
+
+argocd-install: ## Install ArgoCD into the cluster
+	kubectl create namespace argocd || true
+	kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml --server-side --force-conflicts
+	@echo "Waiting for ArgoCD components to be ready..."
+	kubectl wait --for=condition=available deployment/argocd-server -n argocd --timeout=300s
+
+argocd-password: ## Get the initial admin password for ArgoCD
+	@kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d; echo
+
+argocd-ui: ## Port-forward the ArgoCD UI to localhost:8081
+	@echo "ArgoCD UI will be available at https://localhost:8081"
+	kubectl port-forward svc/argocd-server -n argocd 8081:443
