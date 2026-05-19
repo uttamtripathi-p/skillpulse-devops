@@ -26,6 +26,18 @@ jobs:
       - name: Get EC2 IP
         id: get_ip
         run: |
+          STATE=$(aws ec2 describe-instances \
+            --instance-ids ${{ secrets.EC2_INSTANCE_ID }} \
+            --query "Reservations[0].Instances[0].State.Name" \
+            --output text --region ap-south-1)
+          
+          if [ "$STATE" != "running" ]; then
+            echo "Instance is $STATE. Starting..."
+            aws ec2 start-instances --instance-ids ${{ secrets.EC2_INSTANCE_ID }} --region ap-south-1
+            aws ec2 wait instance-running --instance-ids ${{ secrets.EC2_INSTANCE_ID }} --region ap-south-1
+            sleep 30
+          fi
+
           ELASTIC_IP=$(aws ec2 describe-addresses \
             --filters "Name=instance-id,Values=${{ secrets.EC2_INSTANCE_ID }}" \
             --query "Addresses[0].PublicIp" \
