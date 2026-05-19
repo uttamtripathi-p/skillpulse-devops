@@ -55,3 +55,4 @@ volumes:
 
 networks:
   skillpulse:
+    external: true
