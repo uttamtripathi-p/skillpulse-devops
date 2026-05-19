@@ -74,3 +74,20 @@
         owner: ubuntu
         group: ubuntu
         mode: '0600'
+
+    - name: Ensure skillpulse network exists
+      docker_network:
+        name: skillpulse
+        state: present
+
+    - name: Start application stack
+      community.docker.docker_compose_v2:
+        project_src: "{{ app_dir }}"
+        state: present
+
+    - name: Start monitoring stack
+      community.docker.docker_compose_v2:
+        project_src: "{{ app_dir }}"
+        files:
+          - docker-compose.monitoring.yml
+        state: present

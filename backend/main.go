@@ -56,6 +56,7 @@ func prometheusMiddleware() gin.HandlerFunc {
 }
 
 func main() {
+	log.Printf("SkillPulse API starting up...")
 	database.Connect()
 	router := gin.Default()
 

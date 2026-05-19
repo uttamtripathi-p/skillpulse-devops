@@ -12,6 +12,8 @@ up: ## One-shot: build images, create cluster, load images, apply manifests
 	$(MAKE) apply
 	@echo
 	@echo "  SkillPulse is live at http://localhost:8888"
+	@echo "  Prometheus is live at http://localhost:9090"
+	@echo "  Grafana is live at    http://localhost:3000"
 	@echo
 
 build: ## Build backend + frontend images for the host's architecture
@@ -29,10 +31,13 @@ apply: ## Apply manifests and wait for rollouts
 	kubectl apply -f k8s/00-namespace.yaml \
 	              -f k8s/10-mysql.yaml \
 	              -f k8s/20-backend.yaml \
-	              -f k8s/30-frontend.yaml
+	              -f k8s/30-frontend.yaml \
+	              -f k8s/40-monitoring.yaml
 	kubectl rollout status statefulset/mysql    -n $(NAMESPACE) --timeout=180s
 	kubectl rollout status deployment/backend   -n $(NAMESPACE) --timeout=120s
 	kubectl rollout status deployment/frontend  -n $(NAMESPACE) --timeout=60s
+	kubectl rollout status deployment/prometheus -n $(NAMESPACE) --timeout=60s
+	kubectl rollout status deployment/grafana    -n $(NAMESPACE) --timeout=60s
 
 down: ## Delete the cluster
 	kind delete cluster --name $(CLUSTER)

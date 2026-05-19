@@ -29,11 +29,15 @@ spec:
     metadata:
       labels:
         app: backend
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
     spec:
       containers:
         - name: backend
-          image: trainwithshubham/skillpulse-backend:latest
-          imagePullPolicy: IfNotPresent
+          image: uttamtripathi/skillpulse-backend:latest
+          imagePullPolicy: Always
           ports:
             - name: http
               containerPort: 8080

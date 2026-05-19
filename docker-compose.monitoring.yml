@@ -24,8 +24,8 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_ADMIN_PASSWORD:-admin}
+      - GF_SECURITY_ADMIN_USER=${GF_ADMIN_USER:-admin}
     volumes:
       - grafana-data:/var/lib/grafana
     networks:
@@ -33,7 +33,9 @@ services:
 
 volumes:
   grafana-data:
+  prometheus-data:
 
 networks:
   skillpulse:
     external: true
+  external: true

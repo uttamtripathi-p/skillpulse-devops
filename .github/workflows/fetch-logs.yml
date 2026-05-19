@@ -1,0 +1,74 @@
+name: Fetch Logs
+
+on:
+  workflow_dispatch:
+    inputs:
+      lines:
+        description: 'Number of lines to fetch'
+        required: true
+        default: '100'
+  workflow_run:
+    workflows: ["CD"]
+    types: [completed]
+
+jobs:
+  fetch-logs:
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-1
+
+      - name: Get EC2 IP
+        id: get_ip
+        run: |
+          ELASTIC_IP=$(aws ec2 describe-addresses \
+            --filters "Name=instance-id,Values=${{ secrets.EC2_INSTANCE_ID }}" \
+            --query "Addresses[0].PublicIp" \
+            --output text --region ap-south-1)
+          if [ -z "$ELASTIC_IP" ] || [ "$ELASTIC_IP" == "None" ]; then
+            echo "ERROR: Could not find Elastic IP for instance ${{ secrets.EC2_INSTANCE_ID }}"
+            exit 1
+          fi
+          echo "EC2_HOST=$ELASTIC_IP" >> $GITHUB_OUTPUT
+
+      - name: Stream logs to GitHub Console
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ steps.get_ip.outputs.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd ~/github-actions-kubernetes-hackathon
+            echo "=== APP STACK LOGS ==="
+            docker compose logs --tail=${{ github.event.inputs.lines || 100 }}
+            echo "=== MONITORING STACK LOGS ==="
+            docker compose -f docker-compose.monitoring.yml logs --tail=${{ github.event.inputs.lines || 100 }}
+
+      - name: Archive logs as artifact
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ steps.get_ip.outputs.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          # We'll cat the logs and capture them in the runner
+          script: |
+            cd ~/github-actions-kubernetes-hackathon
+            docker compose logs --tail=500 > last-deploy.log
+            docker compose -f docker-compose.monitoring.yml logs --tail=500 >> last-deploy.log
+
+      - name: Transfer log file to runner
+        run: |
+          echo "${{ secrets.EC2_SSH_KEY }}" > key.pem
+          chmod 400 key.pem
+          scp -o StrictHostKeyChecking=no -i key.pem ${{ secrets.EC2_USER }}@${{ steps.get_ip.outputs.EC2_HOST }}:~/github-actions-kubernetes-hackathon/last-deploy.log ./app.log
+
+      - name: Upload Logs Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-logs
+          path: app.log
