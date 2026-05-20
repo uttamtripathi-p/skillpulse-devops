@@ -1,4 +1,4 @@
-# SkillPulse — Production DevOps Pipeline on AWS
+# SkillPulse — Production DevOps Pipeline on AWS.
 
 > A 3-tier Go + React + MySQL application with a fully automated CI/CD pipeline, observability stack, and Infrastructure as Code.
 > One `git push` → running update on AWS EC2 in under 2 minutes. No human pressing any button.
