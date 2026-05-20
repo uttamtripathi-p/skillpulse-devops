@@ -26,3 +26,6 @@ ansible/inventory.ini
 *.tar.gz
 *.zip
 *.gz
+terraform.tfstate
+terraform.tfstate.backup
+terraform/**/*.tfstate
