@@ -1,393 +1,500 @@
-# SkillPulse — GitHub Actions & Kubernetes Masterclass.
+# SkillPulse — Production DevOps Pipeline on AWS
 
-A small, real application with a real CI/CD pipeline. The app — SkillPulse — lets you track skills you're learning and the hours you put in. The point isn't the app. The point is everything around it: how a single `git push` becomes a running update on a server in under two minutes, with no human pressing any button.
-
-This repo is the working demo for the **TrainWithShubham GitHub Actions & Kubernetes Masterclass**.
-
-> **New here? Two beginner-friendly companion guides:**
->
-> - [`docs/skillpulse-cicd-guide.pdf`](docs/skillpulse-cicd-guide.pdf) — chapter one. 29 pages on the GitHub Actions pipeline: DevOps foundations, CI/CD, containers, deploying to a real EC2, plus resume + interview prep.
-> - [`docs/skillpulse-kubernetes-guide.pdf`](docs/skillpulse-kubernetes-guide.pdf) — chapter two. 32 pages on running this app on a local `kind` cluster: Kubernetes primitives, manifest walkthrough, the dev loop, real failures we hit (arch mismatches, port collisions), interview prep.
+> A 3-tier Go + React + MySQL application with a fully automated CI/CD pipeline, observability stack, and Infrastructure as Code.
+> One `git push` → running update on AWS EC2 in under 2 minutes. No human pressing any button.
 
 ---
 
-## Why DevOps matters
+## What This Project Covers
 
-For most of software's history, the people who *wrote* software and the people who *ran* it were two different teams with two different goals.
-
-- Developers wanted to ship features.
-- Operations wanted stability.
-
-The fastest way for ops to be stable was to slow developers down. The fastest way for developers to ship was to throw code over the wall. Both teams were right. Both teams were also miserable. And the customer paid the price — releases happened once a quarter, every release was scary, and bugs took weeks to fix.
-
-DevOps is the cultural and technical answer to that: *the same team owns the change all the way to production, and tooling makes that safe.* It's not a job title. It's a way of working that says small, frequent, automated, and reversible beats big, rare, manual, and irreversible — every time.
-
-When DevOps is working you can tell because:
-
-- **Deploys are boring.** Friday afternoon, Monday morning, doesn't matter.
-- **Rollbacks are cheap.** A bad deploy is a 30-second fix, not an incident.
-- **Feedback is fast.** A broken commit fails CI in minutes, not "after QA next sprint."
-- **Ownership is clear.** The person who wrote the code is the person who watches it ship.
-
-You get there by automating the path from a developer's laptop to production. That automation is called a **pipeline**.
+- **CI/CD** — GitHub Actions pipeline (build → push → deploy)
+- **Containerization** — Docker + Docker Compose (app stack + monitoring stack)
+- **Kubernetes** — kind cluster with full manifest set + ArgoCD
+- **IaC** — Terraform provisions AWS infrastructure (VPC, EC2, SG)
+- **Config Management** — Ansible configures EC2
+- **Observability** — Prometheus + Grafana + Loki + Promtail + Node Exporter
+- **Secrets Management** — GitHub Secrets injected into EC2 at deploy time
+- **Cost Control** — EC2 auto-start before deploy, auto-stop after
 
 ---
 
-## Why CI/CD is the heart of DevOps
-
-CI/CD is two ideas wearing one acronym.
-
-- **Continuous Integration** — every change, from every developer, gets built and tested automatically the moment it lands. You catch breakage in minutes, not days. Merge conflicts shrink because nobody's branch lives for two weeks.
-- **Continuous Delivery / Deployment** — every change that passes CI is automatically packaged and shipped — to staging, or all the way to production. There is no "deploy day." Every commit is a candidate release.
-
-The reason this matters: the cost of fixing a bug grows with the time between writing it and finding it. CI/CD shortens that gap to minutes. The reason it's hard: the only way to make it work is to *automate everything*. Build, test, package, deploy, verify. No "just run this script on my laptop" steps. If a human has to remember it, it will eventually be forgotten — and then it will fail at 2 a.m.
-
----
-
-## Why GitHub Actions
-
-A pipeline needs a runner — something that watches your repo, executes your build/test/deploy steps, and reports back. Historically that meant standing up a Jenkins server, paying for CircleCI, or wiring something custom. All of those still work; none of them are the lowest-friction option in 2026.
-
-GitHub Actions wins on three things:
-
-1. **It lives where the code lives.** No separate server, no separate auth, no separate UI. Your `.github/workflows/*.yml` files are part of the repo — they evolve with the code, get reviewed in the same PRs, and survive every clone.
-2. **It's free for public repos and generous for private ones.** A complete CI/CD pipeline costs zero rupees to start.
-3. **The Marketplace is enormous.** Need to SSH into a server? `appleboy/ssh-action`. Need to log in to Docker Hub? `docker/login-action`. You compose pre-built blocks instead of writing bash from scratch.
-
-The trade-off is GitHub lock-in. For most teams, that's a fair price for the integration.
-
----
-
-## What this project demonstrates
-
-A real pipeline, end to end, in roughly 50 lines of YAML.
+## Architecture
 
 ```
-┌─────────────┐     git push        ┌──────────────────┐
-│  Developer  ├────────────────────▶│  GitHub Repo     │
-└─────────────┘                     └────────┬─────────┘
-                                             │ on: push (main)
-                                             ▼
-                                    ┌──────────────────┐
-                                    │  CI Workflow     │
-                                    │  - build images  │
-                                    │  - tag :sha      │
-                                    │  - tag :latest   │
-                                    │  - push to Hub   │
-                                    └────────┬─────────┘
-                                             │ workflow_run: success
-                                             ▼
-                                    ┌──────────────────┐
-                                    │  CD Workflow     │
-                                    │  - SSH to EC2    │
-                                    │  - git pull      │
-                                    │  - compose pull  │
-                                    │  - compose up -d │
-                                    └────────┬─────────┘
-                                             │
-                                             ▼
-                                    ┌──────────────────┐
-                                    │  EC2: live app   │
-                                    │  http://<host>   │
-                                    └──────────────────┘
+Developer
+    │ git push → main
+    ▼
+┌─────────────────────┐
+│   CI Workflow       │
+│   - Build images    │
+│   - Tag :sha+latest │
+│   - Push Docker Hub │
+└────────┬────────────┘
+         │ workflow_run: success
+         ▼
+┌──────────────────────┐
+│   CD Workflow        │
+│   - Start EC2 (AWS)  │
+│   - SSH into EC2     │
+│   - git pull         │
+│   - Inject secrets   │
+│   - docker compose   │
+│   - Stop EC2         │
+└────────┬─────────────┘
+         ▼
+┌─────────────────────────────────────────────┐
+│  AWS EC2 t3.medium — Ubuntu 22.04           │
+│                                             │
+│  App Stack          Monitoring Stack        │
+│  ┌──────────┐       ┌────────────┐          │
+│  │ frontend │:80    │ Prometheus │:9090      │
+│  │ backend  │:8080  │ Grafana    │:3000      │
+│  │ mysql    │:3306  │ Loki       │:3100      │
+│  └──────────┘       │ Promtail   │           │
+│                     │ Node Exp.  │:9100      │
+│                     └────────────┘          │
+└─────────────────────────────────────────────┘
 ```
-
-### CI — `.github/workflows/ci.yml`
-
-Triggered on every push to `main`. It does four things:
-
-1. **Checks out the code.** A fresh clone in a clean Ubuntu runner — no laptop state to leak.
-2. **Builds two Docker images.** A Go backend and an Nginx-served frontend. Both are multi-stage so the final images are small.
-3. **Tags each image twice.** With the commit SHA (`:abc1234…`) and with `:latest`. The SHA tag is your rollback handle — you can always pin a deploy to an exact commit. The `:latest` tag is what production pulls.
-4. **Pushes both to Docker Hub.** Authenticated with secrets (`DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`) — never plaintext credentials in the repo.
-
-The non-obvious lesson: **CI doesn't just test your code. It produces an artifact.** That artifact — the image — is what production runs. If the artifact is built consistently in CI, it's the same in dev, staging, and prod. "Works on my machine" stops being a possibility.
-
-### CD — `.github/workflows/cd.yml`
-
-Triggered automatically when CI completes successfully (`workflow_run` + a `conclusion == 'success'` gate). Skipped if CI failed — you cannot deploy a broken build.
-
-It SSHes into an EC2 instance and runs:
-
-```bash
-if [ ! -d ~/skillpulse ]; then
-  git clone <this repo> ~/skillpulse
-fi
-cd ~/skillpulse
-git pull origin main
-[ -f .env ] || { echo "ERROR: .env missing"; exit 1; }
-docker compose pull
-docker compose up -d
-docker image prune -f
-```
-
-Every line earns its place:
-
-- The `if [ ! -d ... ]` makes the script **idempotent** — the same script runs whether it's the first deploy or the hundredth.
-- The `.env` check fails *loudly* with a useful message instead of letting `docker compose` produce a cryptic error about missing variables.
-- `docker compose pull` brings in the image you just built. `up -d` only recreates containers whose image actually changed — backend and DB don't get bounced if you only edited frontend HTML.
-- `docker image prune -f` keeps the EC2 disk from filling up with old image layers over weeks of deploys.
-
-### Secrets used
-
-| Secret | What it is |
-|---|---|
-| `DOCKERHUB_USERNAME` | Your Docker Hub account name |
-| `DOCKERHUB_TOKEN` | A Docker Hub Personal Access Token with read+write scope |
-| `EC2_HOST` | Public IP or DNS of the deploy target |
-| `EC2_USER` | Linux user on the EC2 (typically `ubuntu`) |
-| `EC2_SSH_KEY` | Private key contents — paste the entire `.pem` file as the secret value |
-
-Set them at `Settings → Secrets and variables → Actions` on your fork.
 
 ---
 
-## The application itself
+## Prerequisites
 
-A three-tier app — kept tiny on purpose so the pipeline is the star.
+Install these on your local machine before starting:
 
-| Tier | Tech | What it does |
+| Tool | Purpose | Install |
 |---|---|---|
-| Frontend | HTML + CSS + vanilla JS, served by Nginx | UI for adding skills and logging hours |
-| Backend | Go 1.26 + Gin | REST API at `/api/...` |
-| Database | MySQL 8.4 | Stores skills and learning logs |
+| Git | Version control | `sudo apt install git` |
+| Docker + Docker Compose | Containerization | [docs.docker.com](https://docs.docker.com/engine/install/) |
+| AWS CLI | Manage AWS resources | `pip install awscli` |
+| Terraform | Provision infrastructure | [developer.hashicorp.com](https://developer.hashicorp.com/terraform/install) |
+| Ansible | Configure EC2 | `pip install ansible` |
+| kubectl | Kubernetes CLI | `sudo snap install kubectl --classic` |
+| kind | Local Kubernetes cluster | `go install sigs.k8s.io/kind@latest` |
+| make | Run Makefile targets | `sudo apt install make` |
 
-Nginx in the frontend image also reverse-proxies `/api/` and `/health` to the backend, so the public surface is a single port (`80`).
+---
 
-API surface:
+## Step 1 — Fork and Clone
 
-```
-GET    /api/skills              list skills + total hours
-POST   /api/skills              create skill
-GET    /api/skills/:id          one skill + its logs
-DELETE /api/skills/:id          delete skill (cascades logs)
-POST   /api/skills/:id/log      log a study session
-GET    /api/dashboard           summary counters
-GET    /health                  DB ping for healthchecks
+```bash
+# Fork this repo on GitHub first, then:
+git clone https://github.com/<your-username>/skillpulse-devops.git
+cd skillpulse-devops
 ```
 
 ---
 
-## Run it locally
+## Step 2 — Configure AWS CLI
 
 ```bash
-cp .env.example .env             # fill in DOCKERHUB_USERNAME (anything works for local)
-docker compose up -d --build
+aws configure
+# AWS Access Key ID:     <your key>
+# AWS Secret Access Key: <your secret>
+# Default region:        ap-south-1
+# Default output format: json
 ```
 
-Open http://localhost. Backend port 8080 is intentionally not exposed — all traffic goes through Nginx, exactly like production.
+Verify:
+```bash
+aws sts get-caller-identity
+```
 
-To tear down:
+---
+
+## Step 3 — Provision Infrastructure with Terraform
+
+Terraform creates: VPC, public subnet, internet gateway, route table, security group, EC2 (t3.medium, Ubuntu 22.04).
 
 ```bash
-docker compose down -v           # -v also drops the MySQL volume
+cd terraform
+
+# Review what will be created
+terraform init
+terraform plan -var-file=prod.tfvars
+
+# Create infra
+terraform apply -var-file=prod.tfvars -auto-approve
+```
+
+Or use the Makefile shortcut from the root:
+```bash
+make infra
+```
+
+After apply, note the output:
+```
+ec2_public_ip = "65.x.x.x"
+```
+
+---
+
+## Step 4 — Configure EC2 with Ansible
+
+Ansible installs Docker, Docker Compose, AWS CLI, and sets up the project directory on EC2.
+
+**Update inventory first:**
+```bash
+# edit ansible/inventory.ini
+[ec2]
+65.x.x.x ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/your-key.pem
+```
+
+Then run:
+```bash
+make setup-ec2
+# or directly:
+ansible-playbook -i ansible/inventory.ini ansible/playbook.yml
+```
+
+---
+
+## Step 5 — Set Up Docker Hub
+
+1. Create account at [hub.docker.com](https://hub.docker.com)
+2. Create two repositories:
+   - `<username>/skillpulse-backend`
+   - `<username>/skillpulse-frontend`
+3. Generate a Personal Access Token:
+   - Docker Hub → Account Settings → Security → New Access Token
+   - Scope: **Read & Write**
+   - Copy the token (shown only once)
+
+---
+
+## Step 6 — Add GitHub Secrets
+
+Go to your repo → **Settings → Secrets and variables → Actions → Secrets tab**
+
+| Secret Name | How to get it |
+|---|---|
+| `AWS_ACCESS_KEY_ID` | AWS Console → IAM → Your user → Security credentials |
+| `AWS_SECRET_ACCESS_KEY` | Same as above |
+| `EC2_INSTANCE_ID` | `aws ec2 describe-instances --region ap-south-1 --query "Reservations[].Instances[].[InstanceId]" --output text` |
+| `EC2_USER` | `ubuntu` |
+| `EC2_SSH_KEY` | `cat ~/.ssh/your-key.pem` — paste entire contents |
+| `DOCKERHUB_USERNAME` | Your Docker Hub username |
+| `DOCKERHUB_TOKEN` | Token from Step 5 |
+| `MYSQL_ROOT_PASSWORD` | Any strong password e.g. `rootpassword123` |
+| `DB_NAME` | `skillpulse` |
+| `DB_USER` | `skillpulse` |
+| `DB_PASSWORD` | Any password e.g. `skillpulse123` |
+
+---
+
+## Step 7 — Add GitHub Variable
+
+Go to repo → **Settings → Secrets and variables → Actions → Variables tab**
+
+| Variable | Value |
+|---|---|
+| `DEPLOY_ENABLED` | `true` |
+
+> Set to `false` to disable all deployments without touching pipeline code.
+
+---
+
+## Step 8 — Open EC2 Security Group Ports
+
+AWS Console → EC2 → Security Groups → your SG → Inbound Rules → Add:
+
+| Port | Purpose |
+|---|---|
+| 22 | SSH |
+| 80 | Frontend |
+| 3000 | Grafana |
+| 9090 | Prometheus |
+| 3100 | Loki |
+
+> Terraform handles this automatically if you used `make infra`.
+
+---
+
+## Step 9 — Trigger the Pipeline
+
+```bash
+git commit --allow-empty -m "ci: trigger first deploy"
+git push origin main
+```
+
+Watch at `https://github.com/<your-username>/skillpulse-devops/actions`:
+
+- **CI** → builds + pushes images to Docker Hub (~1.5 min)
+- **CD** → starts EC2, SSHes in, pulls images, starts all containers, stops EC2 (~2 min)
+
+App is live at: `http://<your-ec2-ip>`
+
+---
+
+## Step 10 — Verify Everything is Running
+
+SSH into EC2:
+```bash
+ssh -i ~/.ssh/your-key.pem ubuntu@<ec2-ip>
+cd ~/skillpulse-devops
+docker ps --format "table {{.Names}}\t{{.Ports}}\t{{.Status}}"
+```
+
+Expected:
+```
+NAMES           PORTS                     STATUS
+frontend        0.0.0.0:80->80/tcp        Up
+backend         8080/tcp                  Up
+db              0.0.0.0:3306->3306/tcp    Up (healthy)
+prometheus      0.0.0.0:9090->9090/tcp    Up
+grafana         0.0.0.0:3000->3000/tcp    Up
+loki            0.0.0.0:3100->3100/tcp    Up
+promtail                                  Up
+node-exporter   9100/tcp                  Up
+```
+
+---
+
+## Access Points
+
+| Service | URL |
+|---|---|
+| SkillPulse App | `http://<ec2-ip>` |
+| Prometheus | `http://<ec2-ip>:9090` |
+| Grafana | `http://<ec2-ip>:3000` (admin / admin) |
+| Loki | `http://<ec2-ip>:3100` |
+
+---
+
+## Run Locally (Docker Compose)
+
+```bash
+cp .env.example .env        # fill in values
+docker compose up -d --build
+# App: http://localhost
+
+docker compose -f docker-compose.monitoring.yml up -d
+# Grafana:    http://localhost:3000
+# Prometheus: http://localhost:9090
+
+# Tear down
+docker compose down -v
 ```
 
 ---
 
 ## Run on Kubernetes (kind)
 
-Same app, same images, same external port — but now every primitive a student would see in production: namespace, deployment, service, statefulset, configmap, secret, pvc.
+Full local Kubernetes cluster with namespace, deployments, services, statefulset, PVC, and monitoring.
 
-**Prerequisites:** Docker Desktop running, plus `brew install kind kubectl`.
+**Prerequisites:** Docker running, `kind` and `kubectl` installed.
 
 ```bash
-make up                          # creates the kind cluster + applies manifests
-# visit http://localhost:8888
-make down                        # deletes the cluster (and the MySQL data with it)
+# One-shot: build images, create cluster, load images, apply all manifests
+make up
+
+# App:        http://localhost:8888
+# Prometheus: http://localhost:9090
+# Grafana:    http://localhost:3000
+
+# Tear down
+make down
 ```
 
-What `make up` actually runs, in order:
-
+What `make up` runs internally:
 ```bash
-docker build -t trainwithshubham/skillpulse-backend:latest  ./backend
-docker build -t trainwithshubham/skillpulse-frontend:latest ./frontend
+docker build -t uttamtripathi/skillpulse-backend:latest  ./backend
+docker build -t uttamtripathi/skillpulse-frontend:latest ./frontend
 kind create cluster --config k8s/kind-config.yaml --name skillpulse
-kind load docker-image trainwithshubham/skillpulse-backend:latest  --name skillpulse
-kind load docker-image trainwithshubham/skillpulse-frontend:latest --name skillpulse
-kubectl apply -f k8s/00-namespace.yaml \
-              -f k8s/10-mysql.yaml \
-              -f k8s/20-backend.yaml \
-              -f k8s/30-frontend.yaml
-kubectl rollout status statefulset/mysql   -n skillpulse --timeout=180s
-kubectl rollout status deployment/backend  -n skillpulse --timeout=120s
-kubectl rollout status deployment/frontend -n skillpulse --timeout=60s
+kind load docker-image uttamtripathi/skillpulse-backend:latest  --name skillpulse
+kind load docker-image uttamtripathi/skillpulse-frontend:latest --name skillpulse
+kubectl apply -f k8s/manifests/00-namespace.yaml \
+              -f k8s/manifests/10-mysql.yaml \
+              -f k8s/manifests/20-backend.yaml \
+              -f k8s/manifests/30-frontend.yaml \
+              -f k8s/manifests/40-monitoring.yaml
+kubectl rollout status statefulset/mysql     -n skillpulse --timeout=180s
+kubectl rollout status deployment/backend    -n skillpulse --timeout=120s
+kubectl rollout status deployment/frontend   -n skillpulse --timeout=60s
+kubectl rollout status deployment/prometheus -n skillpulse --timeout=60s
+kubectl rollout status deployment/grafana    -n skillpulse --timeout=60s
+kubectl rollout status deployment/loki       -n skillpulse --timeout=60s
 ```
 
-Notes on this flow:
-
-- **`docker build` runs on your laptop**, producing images for your host's architecture (Apple Silicon → arm64; Intel/Linux → amd64). The cluster never has to deal with multi-arch.
-- **`kind load docker-image`** copies each image into the kind node's containerd. `imagePullPolicy: IfNotPresent` on the Deployments means k8s reuses the loaded image and never tries to pull from Docker Hub.
-- **`kind-config.yaml`** lives alongside the manifests for proximity, but it's a `kind` config — not a Kubernetes resource — so it's fed to `kind create cluster`, not `kubectl apply`.
-
-Inner-loop after editing code: `make restart` rebuilds the images, reloads them into the cluster, and rolls the Deployments.
-
-### How traffic flows
-
-The cluster has **three nodes**: one control-plane and two workers (`skillpulse-worker`, `skillpulse-worker2`). Workloads schedule onto the workers — the control-plane is tainted `NoSchedule` by default, so it stays focused on the API server, scheduler, and controller-manager.
-
-```
-host browser            kind cluster (1 control-plane + 2 workers)
-http://localhost:8888
-        │
-        ▼ (kind extraPortMappings on control-plane: hostPort 8888 → nodePort 30080)
-   Service frontend (NodePort 30080)  — reachable on every node, kube-proxy routes
-        │
-        ▼
-   Deployment frontend (nginx + static)  — runs on whichever worker the scheduler picks
-        │ proxy_pass http://backend:8080  (same hostname as docker-compose)
-        ▼
-   Service backend (ClusterIP 8080)
-        │
-        ▼
-   Deployment backend (Go + Gin)
-        │ DB_HOST=mysql
-        ▼
-   Service mysql (Headless 3306)
-        │
-        ▼
-   StatefulSet mysql + 1Gi PVC + ConfigMap-mounted init.sql
-```
-
-### Manifest layout
-
-```
-k8s/
-  kind-config.yaml      cluster shape: 1 control-plane + 2 workers, host 8888 → node 30080
-  00-namespace.yaml     namespace: skillpulse
-  10-mysql.yaml         Secret + ConfigMap (init.sql) + headless Service + StatefulSet + 1Gi PVC
-  20-backend.yaml       Deployment + ClusterIP Service, env from Secret, /health probes
-  30-frontend.yaml      Deployment + NodePort Service (30080), / probes
-```
-
-### Useful commands
+### Makefile Commands
 
 | Command | What it does |
 |---|---|
-| `make status` | One-screen view of pods, services, endpoints |
-| `make logs` | Tail all three workloads at once |
-| `make mysql` | Open a `mysql` shell in the StatefulSet pod |
-| `make restart` | Roll backend + frontend (e.g. after pushing a new image) |
+| `make up` | Build + create cluster + apply all manifests |
+| `make down` | Delete the kind cluster |
+| `make build` | Build backend + frontend Docker images |
+| `make load` | Load images into kind node |
+| `make apply` | Apply all k8s manifests |
+| `make restart` | Rebuild images + rolling restart deployments |
+| `make status` | Show pods, services, endpoints |
+| `make logs` | Tail logs from all workloads |
+| `make mysql` | Open MySQL shell in StatefulSet pod |
+| `make argocd-install` | Install ArgoCD into the cluster |
+| `make argocd-password` | Get ArgoCD admin password |
+| `make argocd-ui` | Port-forward ArgoCD UI to localhost:8081 |
+| `make infra` | Terraform init + apply AWS infra |
+| `make setup-ec2` | Run Ansible playbook on EC2 |
+| `make deploy-ec2` | Manual deploy to EC2 (bypasses CI/CD) |
 
-### Smoke test
+### Smoke Test
 
 ```bash
-curl http://localhost:8888/health                 # → {"status":"healthy"}
-curl http://localhost:8888/api/dashboard          # → seed-data counters
-curl -s http://localhost:8888/ | grep '<title>'   # → HTML title containing "SkillPulse"
-```
-
-### Gotchas worth knowing
-
-- **Docker Desktop must be running.** `docker build`, `kind`, and `kubectl` all talk to the Docker daemon on your machine.
-- **First boot is slow.** The local-path provisioner has to materialise the PVC before MySQL starts. Expect 10–30s of `Pending` on `make up`'s first run.
-- **Host port collision.** If something else owns 8888 on the host, the cluster comes up but `curl localhost:8888` fails. Free the port — or change `hostPort` in `k8s/kind-config.yaml` and re-run `make down && make up`.
-- **No Docker Hub round-trip in this chapter.** Images are built locally and pushed into the kind node via `kind load`. Useful when you're iterating on code: `make restart` rebuilds + reloads + rolls without ever touching Docker Hub. (Production EKS/GKE clusters do pull from a registry — that's the next chapter.)
-
-### What's next
-
-This is the **kind chapter** — same app, real Kubernetes primitives, but limited to one local node and `NodePort` access. The next chapter graduates the same workload to:
-
-- An **Ingress** controller (nginx-ingress) so traffic enters via `Ingress` rules instead of NodePort.
-- **Helm or Kustomize** so the manifests stop being copy-pasted between environments.
-- A real **cloud cluster** (EKS / GKE / AKS) and CD that runs `kubectl apply` from the pipeline instead of `appleboy/ssh-action`.
-
----
-
-## Continuous deployment to the kind cluster
-
-The new CD path doesn't `kubectl apply` from GitHub Actions — your kind cluster lives on your laptop, GitHub can't reach it. Instead, the pipeline takes the GitOps shape: **the repo is the source of truth, your cluster is one `git pull && make apply` away**.
-
-```
-git push to main
-    ↓
-CI: build images, push trainwithshubham/skillpulse-{backend,frontend}:{latest,<sha>}
-    ↓
-cd-k8s.yml: sed image: lines in k8s/20-backend.yaml + k8s/30-frontend.yaml
-            commit "deploy: pin backend+frontend to <short-sha>" to main as github-actions[bot]
-    ↓
-(you, locally):
-    git pull && make apply
-    ↓
-kind nodes pull the new :<sha> from Docker Hub → rolling update
-```
-
-### How to wire it up on your fork
-
-1. **Fork this repo + clone locally.** `make up` should work after that (see the [Run on Kubernetes (kind)](#run-on-kubernetes-kind) section).
-2. **Add two secrets** to your fork (`Settings → Secrets and variables → Actions`):
-
-   | Secret | Value |
-   |---|---|
-   | `DOCKERHUB_USERNAME` | your Docker Hub account name |
-   | `DOCKERHUB_TOKEN` | a Docker Hub Personal Access Token with Read & Write scope |
-
-3. **Set the repo variable** `DEPLOY_ENABLED = "true"` (`Settings → Variables → Actions`). Until this is `true`, CI builds without pushing and both CD workflows skip cleanly — the "dry run" state.
-4. **Push any code change** (not a `.md`, not under `k8s/` or `docs/` — those are deliberately ignored by CI). Watch the Actions tab:
-   - **CI** builds + pushes both images to Docker Hub.
-   - **CD (kind cluster — manifest bump)** commits a `deploy: pin backend+frontend to <sha>` change to main.
-5. **Pull and deploy**, on the laptop with the kind cluster:
-   ```bash
-   git pull
-   make apply
-   kubectl get pods -n skillpulse -o wide
-   ```
-   You'll see new pods with the bumped image rolling out. mysql untouched.
-
-### What about the EC2 path?
-
-The previous chapter's `cd.yml` is still in the repo — it SSHes into an EC2 and runs `docker compose up`. It's gated on the same `DEPLOY_ENABLED` variable plus three EC2 secrets (`EC2_HOST`, `EC2_USER`, `EC2_SSH_KEY`). Skip those secrets and `cd.yml` will fail loudly when `DEPLOY_ENABLED=true`; that's expected — it's the previous chapter's deploy target, kept around as the masterclass artifact.
-
-### Break it on purpose to learn
-
-- **Push a commit that fails to build** → both CD workflows are *skipped*, not failed (the `if: success()` gate).
-- **Rotate the Docker Hub token** → next CI fails at the login step. You'll learn what an expired credential looks like in logs.
-- **Edit `k8s/20-backend.yaml`'s image tag by hand and push** → CI is *skipped* (paths-ignore), `cd-k8s.yml` does fire but the manifest is already pinned, so it no-ops and exits 0. That's the loop-protection working.
-
----
-
-## Project layout
-
-```
-backend/                Go service
-  Dockerfile            multi-stage: golang:1.26-alpine → alpine:3.23
-  main.go               wires routes, reads PORT env
-  database/db.go        connects to MySQL with retry-loop
-  handlers/             skills, logs, dashboard endpoints
-  models/               request/response structs
-
-frontend/               static UI + Nginx config
-  Dockerfile            FROM nginx:alpine, copies html/css/js + nginx.conf
-  index.html, css/, js/ vanilla — no build step
-  nginx.conf            serves the site, proxies /api/ to backend:8080
-
-mysql/init.sql          schema + seed data, mounted into the MySQL container
-
-docker-compose.yml      three services: db, backend, frontend
-.env.example            copy to .env
-
-.github/workflows/
-  ci.yml                build + push images on every main push
-  cd.yml                SSH + redeploy on CI success
+curl http://localhost:8888/health           # {"status":"healthy"}
+curl http://localhost:8888/api/dashboard    # summary counters
+curl -s http://localhost:8888/ | grep title # SkillPulse
 ```
 
 ---
 
-## Where this goes next
+## ArgoCD (GitOps)
 
-This is the **GitHub Actions** half of the masterclass. The pipeline currently deploys to a single EC2 via SSH + docker compose — a fine starting point, and the most common "first real pipeline" in the industry.
+```bash
+# Install ArgoCD into kind cluster
+make argocd-install
 
-The Kubernetes half of the course evolves this same app onto a cluster:
+# Get admin password
+make argocd-password
 
-- Replace `docker compose` with manifests (Deployment, Service, Ingress).
-- Replace SSH-driven deploys with `kubectl apply` from CI, then with GitOps (Argo CD / Flux).
-- Add health checks, autoscaling, rolling updates with no downtime, secrets via Kubernetes Secrets or external managers.
-- Run the cluster on EKS / GKE / AKS or local (kind / minikube).
+# Open UI at https://localhost:8081
+make argocd-ui
 
-Same app. Same pipeline shape. Different runtime — and a lot more power.
+# Apply the ArgoCD app manifest
+kubectl apply -f k8s/argocd-app.yaml
+```
+
+ArgoCD watches the repo and auto-syncs manifest changes to the cluster.
 
 ---
 
-## Credits
+## CI/CD Pipeline Details
 
-Built for the [TrainWithShubham](https://www.youtube.com/@TrainWithShubham) community. If this repo helped you understand a real CI/CD pipeline end to end, share it forward — that's how the community grows.
+### CI — `.github/workflows/ci.yml`
+
+Trigger: every push to `main` (ignores `*.md`, `k8s/`, `docs/`)
+
+```
+1. Checkout code on clean Ubuntu runner
+2. Login to Docker Hub using secrets
+3. Build backend image  (multi-stage: golang:alpine → alpine)
+4. Build frontend image (nginx:alpine)
+5. Tag each image: :<commit-sha> + :latest
+6. Push both images to Docker Hub
+```
+
+### CD — `.github/workflows/cd.yml`
+
+Trigger: `workflow_run` on CI success + `DEPLOY_ENABLED == 'true'`
+
+```
+1. Configure AWS credentials
+2. Check EC2 state → start if stopped → wait until running
+3. Fetch Elastic IP
+4. SSH into EC2
+   ├── Clone repo if first deploy, else git pull
+   ├── Inject all secrets into .env
+   ├── docker network create skillpulse || true
+   ├── docker compose pull + up -d --remove-orphans
+   ├── docker compose -f docker-compose.monitoring.yml pull + up -d
+   └── docker image prune -f
+5. Stop EC2 (always runs — even on failure)
+```
+
+---
+
+## Secrets Quick Reference
+
+If you ever forget your secret values:
+
+```bash
+# EC2 instance ID
+aws ec2 describe-instances --region ap-south-1 \
+  --query "Reservations[].Instances[].[InstanceId,State.Name,PublicIpAddress]" \
+  --output table
+
+# Current .env values on EC2
+ssh -i ~/.ssh/your-key.pem ubuntu@<ec2-ip> "cat ~/skillpulse-devops/.env"
+
+# AWS credentials on local
+cat ~/.aws/credentials
+
+# SSH key content for EC2_SSH_KEY secret
+cat ~/.ssh/your-key.pem
+```
+
+---
+
+## Project Layout
+
+```
+.
+├── .github/workflows/
+│   ├── ci.yml                     Build + push images on push to main
+│   └── cd.yml                     Deploy to EC2 on CI success
+├── backend/                       Go + Gin REST API
+│   ├── Dockerfile                 Multi-stage build
+│   ├── main.go
+│   ├── database/db.go
+│   └── handlers/                  skills, logs, dashboard endpoints
+├── frontend/                      Static UI + Nginx reverse proxy
+│   ├── Dockerfile
+│   ├── nginx.conf                 Proxies /api/ to backend:8080
+│   └── index.html, css/, js/
+├── mysql/init.sql                 Schema + seed data
+├── monitoring/
+│   ├── prometheus.yml             Scrape configs
+│   └── promtail-config.yml        Log shipping to Loki
+├── docker-compose.yml             App stack: db, backend, frontend
+├── docker-compose.monitoring.yml  Prometheus, Grafana, Loki, Promtail, Node Exporter
+├── k8s/
+│   ├── kind-config.yaml           3-node cluster (1 control-plane + 2 workers)
+│   ├── argocd-app.yaml            ArgoCD Application manifest
+│   └── manifests/
+│       ├── 00-namespace.yaml
+│       ├── 10-mysql.yaml          StatefulSet + PVC + headless Service
+│       ├── 20-backend.yaml        Deployment + ClusterIP Service
+│       ├── 30-frontend.yaml       Deployment + NodePort (30080)
+│       └── 40-monitoring.yaml     Prometheus, Grafana, Loki
+├── terraform/
+│   ├── main.tf                    VPC, Subnet, IGW, SG, EC2
+│   ├── variables.tf
+│   ├── outputs.tf                 Prints EC2 public IP
+│   ├── providers.tf
+│   └── prod.tfvars
+├── ansible/
+│   ├── inventory.ini              EC2 IP + SSH key path
+│   └── playbook.yml               Installs Docker, Docker Compose, AWS CLI
+└── Makefile                       All shortcuts in one place
+```
+
+---
+
+## API Reference
+
+```
+GET    /api/skills           List all skills + total hours
+POST   /api/skills           Create a skill
+GET    /api/skills/:id       Get one skill + its logs
+DELETE /api/skills/:id       Delete skill (cascades logs)
+POST   /api/skills/:id/log   Log a study session
+GET    /api/dashboard        Summary counters
+GET    /health               DB ping — used by Docker healthcheck
+GET    /metrics              Prometheus metrics endpoint
+```
+
+---
+
+## Troubleshooting
+
+| Problem | Fix |
+|---|---|
+| `make: command not found` on EC2 | Inline make target in cd.yml or `sudo apt install make` |
+| CD skipped after CI passed | Set `DEPLOY_ENABLED = true` in repo Variables tab |
+| `ERR_CONNECTION_REFUSED` on port 80 | Add port 80 to EC2 Security Group inbound rules |
+| Backend/frontend containers not starting | `.env` missing DB vars — verify secret injection in cd.yml |
+| EC2 SSH timeout in CD | EC2 not fully booted — increase `sleep` duration in CD workflow |
+| Docker Hub push fails | Token expired — regenerate PAT and update `DOCKERHUB_TOKEN` secret |
+| `terraform.tfstate` committed to repo | Add to `.gitignore` and run `git rm --cached terraform/terraform.tfstate` |
+
+---
+
+*Built during the TrainWithShubham GitHub Actions & Kubernetes Hackathon — 48 hours.*
